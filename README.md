@@ -1,7 +1,7 @@
 # Things to Markdown
 
 
-[Things](https://culturedcode.com/things/) is a to-do list app for macOS and iPadOS and iOS.
+[Things](https://culturedcode.com/things/) is a to-do list app for macOS and iOS.
 
 This script converts Things logbook into a Markdown file. Simply clone/download the code, install the requirements, and run the code.
 
