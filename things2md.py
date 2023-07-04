@@ -36,7 +36,7 @@ def logbook_to_md(data):
 
     final_md = "# Things3 Logbook\n"
     for date, groups in md_dict.items():
-        final_md += f"## [[{date}]]\n"
+        final_md += f"\n\n## [[{date}]]\n"
         for group, todos in groups.items():
             if group != 'No project or area':
                 final_md += f"### {group}\n"
