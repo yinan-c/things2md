@@ -12,7 +12,10 @@ def logbook_to_md(data):
         todo_link = f"[{entry['title']}](things:///show?id={entry['uuid']})"
         stop_date = datetime.datetime.strptime(entry['stop_date'], '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d')
 
-        md_str = f"- [x] {todo_link}"
+        if entry['status'] == 'completed':
+            md_str = f"- [x] {todo_link}"
+        elif entry['status'] == 'canceled':
+            md_str = f"- [-] {todo_link}"
          
         if 'tags' in entry:
             for tag in entry['tags']:
