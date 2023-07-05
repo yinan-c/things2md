@@ -18,19 +18,23 @@ def logbook_to_md(data):
             for tag in entry['tags']:
                 md_str += f" #{tag}"
 
-        group_key = 'No project or area'
         if 'project' in entry:
             project_link = f"[{entry['project_title']}](things:///show?id={entry['project']})"
             group_key = project_link
-
-        if 'area' in entry:
+        elif 'area' in entry:
             area_link = f"[{entry['area_title']}](things:///show?id={entry['area']})"
             group_key = area_link
+        else:
+            group_key = 'No project or area'
+
 
         if 'notes' in entry:
-            md_str += "\n"
-            notes = '\n'.join('\t' + line for line in entry['notes'].splitlines())
-            md_str += notes
+            if entry['notes'] == '':
+                pass
+            else:
+                md_str += "\n"
+                notes = '\n'.join('\t' + line for line in entry['notes'].splitlines())
+                md_str += notes
 
         md_dict[stop_date][group_key].append(md_str)
 
@@ -38,9 +42,12 @@ def logbook_to_md(data):
     for date, groups in md_dict.items():
         final_md += f"\n\n## [[{date}]]\n"
         for group, todos in groups.items():
+            if group == 'No project or area':
+                final_md += '\n'.join(todos)
+        for group, todos in groups.items():
             if group != 'No project or area':
                 final_md += f"\n### {group}\n"
-            final_md += "\n".join(todos) 
+                final_md += '\n'.join(todos)
 
     return final_md
 
