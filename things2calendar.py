@@ -1,5 +1,5 @@
-from dateutil.parser import parse
 from Foundation import NSDate, NSURL
+from dateutil.parser import parse
 from CalendarStore import CalCalendarStore, CalEvent
 from operator import itemgetter
 from collections import defaultdict
@@ -112,10 +112,10 @@ def add_to_calendar(tasks, calendar_name):
             return
 
 def main_task():
-    logbook = things.logbook()
-    logbook_md = logbook_to_md(logbook)
-    with open('logbook.md', 'w') as f:
-        f.write(logbook_md)
+    #    logbook = things.logbook()
+    #    logbook_md = logbook_to_md(logbook)
+    #    with open('logbook.md', 'w') as f:
+    #        f.write(logbook_md)
     upcoming = things.upcoming()
     add_to_calendar(upcoming, 'Things Upcoming')
 
