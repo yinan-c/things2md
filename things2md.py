@@ -49,9 +49,9 @@ def logbook_to_md(data):
                 final_md += '\n'.join(todos)
         for group, todos in groups.items():
             if group != 'No project or area':
+                #pass
                 final_md += f"\n### {group}\n"
                 final_md += '\n'.join(todos)
-
     return final_md
 
 if __name__ == "__main__":
