@@ -169,7 +169,7 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
                     is_checklist = "Y"
                     checklist_items = []
                     for item in task['checklist']:
-                        prefix = "✓" if item.get('status') == 'completed' else "▫"
+                        prefix = "▪" if item.get('status') == 'completed' else "▫"
                         checklist_items.append(f"{prefix}{item.get('title', '')}")
                     if checklist_items:
                         content = content + "\n" + "\n".join(checklist_items) if content else "\n".join(checklist_items)
@@ -180,7 +180,7 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
                     try:
                         items = things.checklist_items(task['uuid'])
                         for item in items:
-                            prefix = "✓" if item.get('status') == 'completed' else "▫"
+                            prefix = "▪" if item.get('status') == 'completed' else "▫"
                             checklist_items.append(f"{prefix}{item.get('title', '')}")
                         if checklist_items:
                             content = content + "\n" + "\n".join(checklist_items) if content else "\n".join(checklist_items)
