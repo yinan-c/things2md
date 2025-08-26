@@ -180,6 +180,11 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
             
             created_time = format_datetime(task.get('created', ''))
             
+            # Get heading title for Column Name
+            column_name = ""
+            if 'heading_title' in task and task['heading_title']:
+                column_name = task['heading_title']
+            
             # Build row
             row = {
                 "Folder Name": folder_name,
@@ -201,7 +206,7 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
                 "Timezone": "Europe/London",
                 "Is All Day": "true" if due_date and not "T" in due_date else "false",
                 "Is Floating": "false",
-                "Column Name": "",
+                "Column Name": column_name,
                 "Column Order": "0",
                 "View Mode": "list",
                 "taskId": str(task_id),
