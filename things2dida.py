@@ -26,7 +26,7 @@ def get_status_code(status):
     """Convert Things status to Dida status code"""
     status_map = {
         'incomplete': '0',
-        'completed': '1', 
+        'completed': '1',
         'canceled': '-1'
     }
     return status_map.get(status, '0')
@@ -53,21 +53,31 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
     
     print("Fetching data from Things 3...")
     
-    # Get all data from Things - simple approach works best
-    # todos() gets all incomplete tasks
-    # logbook() gets all completed and canceled tasks
+    # Get all data from Things
     todos = things.todos()
     logbook = things.logbook()
     projects = things.projects()
     areas = things.areas()
+    headings = things.tasks(type='heading')  # Get all headings
     
     all_tasks = todos + logbook
     
-    print(f"Found {len(all_tasks)} tasks, {len(projects)} projects, {len(areas)} areas")
+    print(f"Found {len(all_tasks)} tasks, {len(projects)} projects, {len(areas)} areas, {len(headings)} headings")
     
     # Create project and area lookup
     project_lookup = {p['uuid']: p['title'] for p in projects}
     area_lookup = {a['uuid']: a['title'] for a in areas}
+    
+    # Create heading lookup with project info
+    heading_lookup = {}
+    for h in headings:
+        heading_lookup[h['uuid']] = {
+            'title': h.get('title', ''),
+            'project': h.get('project', ''),
+            'project_title': h.get('project_title', ''),
+            'area': h.get('area', ''),
+            'area_title': h.get('area_title', '')
+        }
     
     # Prepare CSV rows
     rows = []
@@ -84,10 +94,10 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
         
         # CSV Headers
         fieldnames = [
-            "Folder Name", "List Name", "Title", "Kind", "Tags", "Content",
+            "Folder Name", "List Name", "Title", "Kind", "Tags", "Content", 
             "Is Check list", "Start Date", "Due Date", "Reminder", "Repeat",
             "Priority", "Status", "Created Time", "Completed Time", "Order",
-            "Timezone", "Is All Day", "Is Floating", "Column Name", 
+            "Timezone", "Is All Day", "Is Floating", "Column Name",
             "Column Order", "View Mode", "taskId", "parentId"
         ]
         
@@ -102,8 +112,21 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
             folder_name = ""
             list_name = "Inbox"
             
-            # First check if task has a project
-            if 'project' in task:
+            # First check if task has a heading (heading -> project -> area)
+            if 'heading' in task and task['heading'] and task['heading'] in heading_lookup:
+                heading_info = heading_lookup[task['heading']]
+                # Get project from heading
+                if heading_info['project']:
+                    list_name = heading_info['project_title'] or project_lookup.get(heading_info['project'], "Inbox")
+                    # Find the area for this project
+                    project_obj = next((p for p in projects if p['uuid'] == heading_info['project']), None)
+                    if project_obj:
+                        if 'area' in project_obj:
+                            folder_name = area_lookup.get(project_obj['area'], "")
+                        elif 'area_title' in project_obj:
+                            folder_name = project_obj['area_title']
+            # Then check if task has a project directly
+            elif 'project' in task:
                 list_name = project_lookup.get(task['project'], "Inbox")
                 # Find the area for this project
                 project_obj = next((p for p in projects if p['uuid'] == task['project']), None)
