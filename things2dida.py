@@ -17,10 +17,16 @@ def format_datetime(dt_string):
         return ""
     
     try:
+        # Try full datetime format first
         dt = datetime.strptime(dt_string, "%Y-%m-%d %H:%M:%S")
         return dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
     except:
-        return ""
+        try:
+            # Try date-only format for start_date and deadline
+            dt = datetime.strptime(dt_string, "%Y-%m-%d")
+            return dt.strftime("%Y-%m-%dT00:00:00+0000")
+        except:
+            return ""
 
 def get_status_code(status):
     """Convert Things status to Dida status code"""
