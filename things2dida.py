@@ -58,7 +58,7 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
     logbook = things.logbook()
     projects = things.projects()
     areas = things.areas()
-    headings = things.tasks(type='heading')  # Get all headings
+    headings = things.tasks(type='heading', status=None)  # Get ALL headings including completed
     
     # Separate completed projects from regular tasks in logbook
     logbook_tasks = [t for t in logbook if t.get('type') != 'project']
