@@ -175,6 +175,17 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
                         content = content + "\n" + "\n".join(checklist_items) if content else "\n".join(checklist_items)
                 elif task['checklist'] == True:
                     is_checklist = "Y"
+                    # Fetch actual checklist items using the API
+                    checklist_items = []
+                    try:
+                        items = things.checklist_items(task['uuid'])
+                        for item in items:
+                            prefix = "✓" if item.get('status') == 'completed' else "▫"
+                            checklist_items.append(f"{prefix}{item.get('title', '')}")
+                        if checklist_items:
+                            content = content + "\n" + "\n".join(checklist_items) if content else "\n".join(checklist_items)
+                    except:
+                        pass  # If fetching fails, continue without checklist items
             
             # Format dates
             start_date = ""
