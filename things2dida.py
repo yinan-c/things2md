@@ -60,12 +60,17 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
     areas = things.areas()
     headings = things.tasks(type='heading')  # Get all headings
     
-    all_tasks = todos + logbook
+    # Separate completed projects from regular tasks in logbook
+    logbook_tasks = [t for t in logbook if t.get('type') != 'project']
+    logbook_projects = [t for t in logbook if t.get('type') == 'project']
     
-    print(f"Found {len(all_tasks)} tasks, {len(projects)} projects, {len(areas)} areas, {len(headings)} headings")
+    all_tasks = todos + logbook_tasks
+    all_projects = projects + logbook_projects  # Include completed projects
     
-    # Create project and area lookup
-    project_lookup = {p['uuid']: p['title'] for p in projects}
+    print(f"Found {len(all_tasks)} tasks, {len(all_projects)} projects ({len(logbook_projects)} completed), {len(areas)} areas, {len(headings)} headings")
+    
+    # Create project and area lookup (include completed projects from logbook)
+    project_lookup = {p['uuid']: p['title'] for p in all_projects}
     area_lookup = {a['uuid']: a['title'] for a in areas}
     
     # Create heading lookup with project info
@@ -119,7 +124,7 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
                 if heading_info['project']:
                     list_name = heading_info['project_title'] or project_lookup.get(heading_info['project'], "Inbox")
                     # Find the area for this project
-                    project_obj = next((p for p in projects if p['uuid'] == heading_info['project']), None)
+                    project_obj = next((p for p in all_projects if p['uuid'] == heading_info['project']), None)
                     if project_obj:
                         if 'area' in project_obj:
                             folder_name = area_lookup.get(project_obj['area'], "")
@@ -129,7 +134,7 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
             elif 'project' in task:
                 list_name = project_lookup.get(task['project'], "Inbox")
                 # Find the area for this project
-                project_obj = next((p for p in projects if p['uuid'] == task['project']), None)
+                project_obj = next((p for p in all_projects if p['uuid'] == task['project']), None)
                 if project_obj:
                     if 'area' in project_obj:
                         folder_name = area_lookup.get(project_obj['area'], "")
@@ -218,45 +223,45 @@ def export_to_dida_csv(output_file="Things_to_Dida_export.csv"):
         
         # Add projects as lists (optional - Dida doesn't import these as separate entities)
         # But we can add them as placeholder tasks to preserve the project structure
-        for project in projects:
-            if project.get('status') != 'completed':  # Only export active projects
-                # Projects belong to areas (folders)
-                folder_name = ""
-                if 'area' in project:
-                    folder_name = area_lookup.get(project['area'], "")
-                elif 'area_title' in project:
-                    folder_name = project['area_title']
-                
-                # Project itself becomes a list under its area
-                row = {
-                    "Folder Name": folder_name,
-                    "List Name": project['title'],
-                    "Title": f"[PROJECT] {project['title']}",
-                    "Kind": "NOTE",
-                    "Tags": format_tags(project.get('tags', [])),
-                    "Content": project.get('notes', ''),
-                    "Is Check list": "N",
-                    "Start Date": format_datetime(project.get('start_date', '')),
-                    "Due Date": format_datetime(project.get('deadline', '')),
-                    "Reminder": "",
-                    "Repeat": "",
-                    "Priority": "0",
-                    "Status": get_status_code(project.get('status', 'incomplete')),
-                    "Created Time": format_datetime(project.get('created', '')),
-                    "Completed Time": format_datetime(project.get('stop_date', '')),
-                    "Order": str(project.get('index', 0)),
-                    "Timezone": "Europe/London",
-                    "Is All Day": "false",
-                    "Is Floating": "false",
-                    "Column Name": "",
-                    "Column Order": "0",
-                    "View Mode": "list",
-                    "taskId": str(task_id),
-                    "parentId": ""
-                }
-                
-                writer.writerow(row)
-                task_id += 1
+        for project in all_projects:
+            # Export all projects, including completed ones
+            # Projects belong to areas (folders)
+            folder_name = ""
+            if 'area' in project:
+                folder_name = area_lookup.get(project['area'], "")
+            elif 'area_title' in project:
+                folder_name = project['area_title']
+            
+            # Project itself becomes a list under its area
+            row = {
+                "Folder Name": folder_name,
+                "List Name": project['title'],
+                "Title": f"[PROJECT] {project['title']}",
+                "Kind": "NOTE",
+                "Tags": format_tags(project.get('tags', [])),
+                "Content": project.get('notes', ''),
+                "Is Check list": "N",
+                "Start Date": format_datetime(project.get('start_date', '')),
+                "Due Date": format_datetime(project.get('deadline', '')),
+                "Reminder": "",
+                "Repeat": "",
+                "Priority": "0",
+                "Status": get_status_code(project.get('status', 'incomplete')),
+                "Created Time": format_datetime(project.get('created', '')),
+                "Completed Time": format_datetime(project.get('stop_date', '')),
+                "Order": str(project.get('index', 0)),
+                "Timezone": "Europe/London",
+                "Is All Day": "false",
+                "Is Floating": "false",
+                "Column Name": "",
+                "Column Order": "0",
+                "View Mode": "list",
+                "taskId": str(task_id),
+                "parentId": ""
+            }
+            
+            writer.writerow(row)
+            task_id += 1
     
     print(f"\nExport completed successfully!")
     print(f"Output file: {output_file}")
