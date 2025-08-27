@@ -67,9 +67,9 @@ def get_existing_events(calendar, start_date=None, end_date=None):
     store = CalCalendarStore.defaultCalendarStore()
     
     if start_date is None:
-        start_date = NSDate.dateWithTimeIntervalSinceNow_(-60*60*24*365*2)  # 2 years ago
+        start_date = NSDate.dateWithTimeIntervalSinceNow_(-60*60*24*365)  # 1 years ago
     if end_date is None:
-        end_date = NSDate.dateWithTimeIntervalSinceNow_(60*60*24*365*2)  # 2 years ahead
+        end_date = NSDate.dateWithTimeIntervalSinceNow_(60*60*24*365*4)  # 4 years ahead
     
     predicate = CalCalendarStore.eventPredicateWithStartDate_endDate_calendars_(
         start_date, end_date, [calendar]
