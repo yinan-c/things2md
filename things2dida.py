@@ -32,7 +32,7 @@ def get_status_code(status):
     """Convert Things status to Dida status code"""
     status_map = {
         'incomplete': '0',
-        'completed': '1',
+        'completed': '2',
         'canceled': '-1'
     }
     return status_map.get(status, '0')
