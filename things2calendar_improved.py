@@ -149,15 +149,37 @@ def should_preserve_manual_edits(existing_event):
     
     return False
 
+def should_update_dates(existing_event, new_event_dict):
+    """Check if dates should be updated even for manually edited events.
+    
+    Returns True if the dates are on different days.
+    """
+    # Convert timestamps to datetime objects for date comparison
+    existing_start = datetime.datetime.fromtimestamp(existing_event.startDate().timeIntervalSince1970())
+    new_start = new_event_dict['start_date']
+    
+    # Check if they're on different days (ignoring time)
+    if existing_start.date() != new_start.date():
+        return True
+    
+    # Also check end dates if they exist
+    existing_end = datetime.datetime.fromtimestamp(existing_event.endDate().timeIntervalSince1970())
+    new_end = new_event_dict['end_date']
+    
+    if existing_end.date() != new_end.date():
+        return True
+    
+    return False
+
 def events_are_different(existing_event, new_event_dict):
     """Check if an existing calendar event differs from new event data.
     
-    Now preserves manually edited events by checking if they've been modified.
+    Preserves manual edits but still syncs dates if they've been moved.
     """
     # Check if this event has been manually edited
     if should_preserve_manual_edits(existing_event):
-        # Don't update manually edited events
-        return False
+        # For manually edited events, only update if dates have changed significantly
+        return should_update_dates(existing_event, new_event_dict)
     
     # For non-manually edited events, check if Things data has changed
     # Check title
@@ -230,11 +252,24 @@ def sync_to_calendar(tasks, calendar_name, today_task_uuids=None):
                 
                 # Check if update is needed
                 if should_preserve_manual_edits(existing_event):
-                    # This event was manually edited, preserve it
-                    events_preserved += 1
-                    logger.debug(f"Preserving manually edited event: {existing_event.title()}")
+                    # This event was manually edited
+                    if should_update_dates(existing_event, event_dict):
+                        # Only update dates if they've been moved to different day
+                        logger.debug(f"Updating dates for manually edited event: {existing_event.title()}")
+                        existing_event.setStartDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['start_date'].timestamp()))
+                        existing_event.setEndDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['end_date'].timestamp()))
+                        
+                        res, err = store.saveEvent_span_error_(existing_event, 0, None)
+                        if res:
+                            events_updated += 1
+                        else:
+                            logger.error(f"Failed to update dates for {event_dict['title']}: {err.localizedDescription()}")
+                    else:
+                        # Preserve the manually edited event as-is
+                        events_preserved += 1
+                        logger.debug(f"Preserving manually edited event: {existing_event.title()}")
                 elif events_are_different(existing_event, event_dict):
-                    # Update the event
+                    # Update the event normally
                     existing_event.setTitle_(event_dict['title'])
                     existing_event.setNotes_(event_dict['notes'] if event_dict['notes'] else None)
                     existing_event.setStartDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['start_date'].timestamp()))
