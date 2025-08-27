@@ -275,7 +275,7 @@ def sync_logbook_to_calendar(tasks, calendar_name='Things Logbook'):
         return
     
     # Get existing events - use wider range for logbook (4 years to cover 2022-2025)
-    start_date = NSDate.dateWithTimeIntervalSinceNow_(-60*60*24*365*4)  # 4 years ago
+    start_date = NSDate.dateWithTimeIntervalSinceNow_(-60*60*24*365*1)  # 4 years ago
     end_date = NSDate.dateWithTimeIntervalSinceNow_(60*60*24*365*1)  # 1 year ahead
     existing_events = get_existing_events(calendar, start_date, end_date)
     logger.info(f"Found {len(existing_events)} existing events in {calendar_name}")
