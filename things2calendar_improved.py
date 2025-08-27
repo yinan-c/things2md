@@ -115,18 +115,27 @@ def task_to_event_dict(task, calendar_name, is_from_today=False):
     elif calendar_name == 'Things Logbook':
         if 'stop_date' not in task or not task['stop_date']:
             return None
-        start_date = parse(task['stop_date'])
+        # Parse the complete datetime including time
+        stop_datetime = parse(task['stop_date'])
+        event_dict['start_date'] = stop_datetime
+        # For logbook, end date is same as start (task was completed at this time)
+        event_dict['end_date'] = stop_datetime
+        # Mark that this should not be all-day
+        event_dict['is_all_day'] = False
     else:
         return None
     
-    event_dict['start_date'] = start_date
-    
-    # Set end date
-    if task.get('deadline'):
-        deadline = parse(task['deadline'])
-        event_dict['end_date'] = deadline
-    else:
-        event_dict['end_date'] = start_date
+    # For non-logbook items, set dates normally
+    if calendar_name != 'Things Logbook':
+        event_dict['start_date'] = start_date
+        
+        # Set end date
+        if task.get('deadline'):
+            deadline = parse(task['deadline'])
+            event_dict['end_date'] = deadline
+        else:
+            event_dict['end_date'] = start_date
+        event_dict['is_all_day'] = True
     
     # Set other properties
     event_dict['title'] = task.get('title', 'Untitled')
@@ -204,6 +213,113 @@ def events_are_different(existing_event, new_event_dict):
         return True
     
     return False
+
+def logbook_events_need_update(existing_event, new_event_dict):
+    """Check if a logbook event needs updating.
+    
+    For logbook: preserve title/notes edits but always sync dates/times.
+    """
+    # Always update if dates differ
+    existing_start = existing_event.startDate().timeIntervalSince1970()
+    new_start = new_event_dict['start_date'].timestamp()
+    if abs(existing_start - new_start) > 60:  # Allow 1 minute tolerance
+        return True
+    
+    existing_end = existing_event.endDate().timeIntervalSince1970()
+    new_end = new_event_dict['end_date'].timestamp()
+    if abs(existing_end - new_end) > 60:  # Allow 1 minute tolerance
+        return True
+    
+    # Don't update title/notes - preserve manual edits
+    return False
+
+def sync_logbook_to_calendar(tasks, calendar_name='Things Logbook'):
+    """Sync logbook entries with preservation of title/note edits.
+    
+    Args:
+        tasks: List of logbook task dictionaries
+        calendar_name: Name of the calendar to sync to
+    """
+    store = CalCalendarStore.defaultCalendarStore()
+    calendars = store.calendars()
+    
+    calendar = next((c for c in calendars if c.title() == calendar_name), None)
+    if calendar is None:
+        logger.error(f'Calendar "{calendar_name}" not found')
+        return
+    
+    # Get existing events
+    existing_events = get_existing_events(calendar)
+    logger.info(f"Found {len(existing_events)} existing events in {calendar_name}")
+    
+    # Track which events we've processed
+    processed_uuids = set()
+    events_added = 0
+    events_updated = 0
+    events_unchanged = 0
+    events_preserved = 0
+    
+    for task in tasks:
+        try:
+            # Convert task to event dictionary
+            event_dict = task_to_event_dict(task, calendar_name)
+            if event_dict is None:
+                continue
+            
+            uuid = task['uuid']
+            processed_uuids.add(uuid)
+            
+            # Check if event exists
+            if uuid in existing_events:
+                existing_event = existing_events[uuid]
+                
+                # Check if dates need updating
+                if logbook_events_need_update(existing_event, event_dict):
+                    # Only update dates/times, preserve title and notes
+                    existing_event.setStartDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['start_date'].timestamp()))
+                    existing_event.setEndDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['end_date'].timestamp()))
+                    existing_event.setIsAllDay_(False)
+                    
+                    res, err = store.saveEvent_span_error_(existing_event, 0, None)
+                    if res:
+                        events_updated += 1
+                        logger.debug(f"Updated dates for logbook event: {existing_event.title()}")
+                    else:
+                        logger.error(f"Failed to update dates for {event_dict['title']}: {err.localizedDescription()}")
+                else:
+                    # Dates are correct, preserve everything
+                    events_preserved += 1
+            else:
+                # Create new event
+                event = CalEvent.event()
+                event.setCalendar_(calendar)
+                event.setTitle_(event_dict['title'])
+                event.setNotes_(event_dict['notes'] if event_dict['notes'] else None)
+                event.setStartDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['start_date'].timestamp()))
+                event.setEndDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['end_date'].timestamp()))
+                event.setUrl_(NSURL.URLWithString_(event_dict['url']))
+                event.setIsAllDay_(event_dict.get('is_all_day', False))
+                
+                res, err = store.saveEvent_span_error_(event, 0, None)
+                if res:
+                    events_added += 1
+                else:
+                    logger.error(f"Failed to add event for {event_dict['title']}: {err.localizedDescription()}")
+                    
+        except Exception as e:
+            logger.error(f"Error processing task {task.get('title', 'Unknown')}: {e}")
+    
+    # Remove events that no longer exist in Things
+    events_removed = 0
+    for uuid, event in existing_events.items():
+        if uuid not in processed_uuids:
+            res, err = store.removeEvent_span_error_(event, 0, None)
+            if res:
+                events_removed += 1
+            else:
+                logger.error(f"Failed to remove event: {err.localizedDescription()}")
+    
+    logger.info(f"{calendar_name}: Added {events_added}, Updated {events_updated}, Preserved {events_preserved}, Removed {events_removed}")
 
 def sync_to_calendar(tasks, calendar_name, today_task_uuids=None):
     """Intelligently sync tasks to calendar, only updating what's changed.
@@ -291,7 +407,7 @@ def sync_to_calendar(tasks, calendar_name, today_task_uuids=None):
                 event.setStartDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['start_date'].timestamp()))
                 event.setEndDate_(NSDate.dateWithTimeIntervalSince1970_(event_dict['end_date'].timestamp()))
                 event.setUrl_(NSURL.URLWithString_(event_dict['url']))
-                event.setIsAllDay_(True)
+                event.setIsAllDay_(event_dict.get('is_all_day', True))
                 
                 res, err = store.saveEvent_span_error_(event, 0, None)
                 if res:
@@ -339,10 +455,11 @@ def main_task():
         logger.info(f"Syncing {len(combined_tasks)} total tasks (upcoming + today)...")
         sync_to_calendar(combined_tasks, 'Things Upcoming', today_task_uuids)
         
-        # Optionally sync logbook (uncomment if needed)
+        # Sync logbook (uncomment to enable)
+        # Note: This syncs completed/cancelled tasks with timestamps preserved
         # logger.info("Syncing logbook...")
-        # logbook = things.logbook()
-        # sync_to_calendar(logbook, 'Things Logbook')
+        # logbook = things.logbook()  # Or use [:50] to limit entries for testing
+        # sync_logbook_to_calendar(logbook, 'Things Logbook')
         
     except Exception as e:
         logger.error(f"Error in main task: {e}")
