@@ -300,8 +300,8 @@ def sync_logbook(calendar_name="Things Logbook"):
     
     # Process entries from -4 to +1 years
     now = datetime.datetime.now()
-    cutoff_date = now - datetime.timedelta(days=365)  # -4 years
-    future_cutoff = now + datetime.timedelta(days=2)  # +1 year
+    cutoff_date = now - datetime.timedelta(days=30)  # -4 years
+    future_cutoff = now + datetime.timedelta(days=1)  # +1 year
     
     # Get existing events
     existing_events = get_existing_events(calendar, cutoff_date, future_cutoff)
@@ -362,7 +362,7 @@ def sync_deadlines(calendar_name="Things Deadlines"):
     # Get existing events in relevant date range (-1 to +4 years)
     today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     past_date = today - datetime.timedelta(days=365)  # -1 year
-    future_date = today + datetime.timedelta(days=365*4)  # +4 years
+    future_date = today + datetime.timedelta(days=365)  # +4 years
     existing_events = get_existing_events(calendar, past_date, future_date)
     
     processed_uuids = set()
@@ -394,7 +394,7 @@ def sync_deadlines(calendar_name="Things Deadlines"):
     print(f"    Created: {created_count}, Updated: {updated_count}, Removed: {removed_count}")
 
 
-def main_sync():
+def main_sync(include_logbook=True):
     """Main sync function to update all calendars."""
     print(f"Starting sync at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
@@ -402,8 +402,9 @@ def main_sync():
         print("Syncing Upcoming and Today tasks...")
         sync_upcoming_and_today()
         
-        print("Syncing Logbook...")
-        sync_logbook()
+        if include_logbook:
+            print("Syncing Logbook...")
+            sync_logbook()
         
         print("Syncing Deadlines...")
         sync_deadlines()
@@ -415,14 +416,37 @@ def main_sync():
         traceback.print_exc()
 
 
-def run_continuous_sync(interval=60):
-    """Run sync continuously at specified interval (in seconds)."""
+def run_continuous_sync(interval=60, logbook_interval=1800):
+    """
+    Run sync continuously at specified intervals.
+    
+    Args:
+        interval: Seconds between syncing Upcoming/Deadlines (default 60 = 1 minute)
+        logbook_interval: Seconds between syncing Logbook (default 1800 = 30 minutes)
+    """
+    last_logbook_sync = 0
+    
     while True:
-        main_sync()
-        print(f"Waiting {interval} seconds until next sync...\n")
+        current_time = time.time()
+        
+        # Check if it's time to sync logbook
+        include_logbook = (current_time - last_logbook_sync) >= logbook_interval
+        
+        if include_logbook:
+            print(f"Including logbook sync (every {logbook_interval/60:.0f} minutes)")
+            last_logbook_sync = current_time
+        
+        main_sync(include_logbook=include_logbook)
+        
+        print(f"Waiting {interval} seconds until next sync...")
+        if not include_logbook:
+            next_logbook = logbook_interval - (current_time - last_logbook_sync)
+            print(f"  (Next logbook sync in {next_logbook/60:.1f} minutes)")
+        print()
+        
         time.sleep(interval)
 
 
 if __name__ == "__main__":
-    # Run continuous sync every 60 seconds
-    run_continuous_sync(60)
+    # Run continuous sync: Upcoming/Deadlines every 60 seconds, Logbook every 30 minutes
+    run_continuous_sync(interval=60, logbook_interval=1800)
