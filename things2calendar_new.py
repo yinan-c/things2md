@@ -84,15 +84,32 @@ def update_event_if_changed(existing_event, task, event_type="upcoming"):
         else:
             target_date = today + datetime.timedelta(days=1)
         
-        existing_date = datetime.datetime.fromtimestamp(existing_event.startDate().timeIntervalSince1970())
+        existing_start_date = datetime.datetime.fromtimestamp(existing_event.startDate().timeIntervalSince1970())
+        existing_end_date = datetime.datetime.fromtimestamp(existing_event.endDate().timeIntervalSince1970())
         
         # Check if on same day
-        if existing_date.date() != target_date.date():
-            # Date is different, update it
-            existing_event.setStartDate_(NSDate.dateWithTimeIntervalSince1970_(target_date.timestamp()))
-            existing_event.setEndDate_(NSDate.dateWithTimeIntervalSince1970_(target_date.timestamp()))
-            existing_event.setIsAllDay_(True)
+        if existing_start_date.date() != target_date.date():
+            # Date is different, need to move to correct date
+            # But preserve time edits if event is on the same day and not all-day
+            if not existing_event.isAllDay():
+                # User has set specific times, preserve the duration
+                duration = existing_end_date - existing_start_date
+                # Combine target date with existing start time
+                new_start = datetime.datetime.combine(target_date.date(), existing_start_date.time())
+                new_end = new_start + duration
+                existing_event.setStartDate_(NSDate.dateWithTimeIntervalSince1970_(new_start.timestamp()))
+                existing_event.setEndDate_(NSDate.dateWithTimeIntervalSince1970_(new_end.timestamp()))
+                existing_event.setIsAllDay_(False)
+            else:
+                # Was all-day, keep it all-day
+                existing_event.setStartDate_(NSDate.dateWithTimeIntervalSince1970_(target_date.timestamp()))
+                existing_event.setEndDate_(NSDate.dateWithTimeIntervalSince1970_(target_date.timestamp()))
+                existing_event.setIsAllDay_(True)
             needs_update = True
+        elif not existing_event.isAllDay():
+            # Same day but user has edited to non-all-day - preserve their edit
+            # No update needed for the time
+            pass
         
         # Update title if changed (but preserve user edits)
         existing_title = existing_event.title() or ""
@@ -241,8 +258,8 @@ def sync_upcoming_and_today(calendar_name="Things Upcoming"):
     
     # Get existing events in relevant date range (-1 to +4 years)
     today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    past_date = today - datetime.timedelta(days=365)  # -1 year
-    future_date = today + datetime.timedelta(days=365*4)  # +4 years
+    past_date = today - datetime.timedelta(days=3)  # -1 year
+    future_date = today + datetime.timedelta(days=365)  # +4 years
     existing_events = get_existing_events(calendar, past_date, future_date)
     
     processed_uuids = set()
@@ -284,7 +301,7 @@ def sync_logbook(calendar_name="Things Logbook"):
     # Process entries from -4 to +1 years
     now = datetime.datetime.now()
     cutoff_date = now - datetime.timedelta(days=365)  # -4 years
-    future_cutoff = now + datetime.timedelta(days=365)  # +1 year
+    future_cutoff = now + datetime.timedelta(days=2)  # +1 year
     
     # Get existing events
     existing_events = get_existing_events(calendar, cutoff_date, future_cutoff)
