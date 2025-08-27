@@ -67,9 +67,9 @@ def get_existing_events(calendar, start_date=None, end_date=None):
     store = CalCalendarStore.defaultCalendarStore()
     
     if start_date is None:
-        start_date = NSDate.dateWithTimeIntervalSinceNow_(-60*60*24*365)  # 1 year ago
+        start_date = NSDate.dateWithTimeIntervalSinceNow_(-60*60*24*365*2)  # 2 years ago
     if end_date is None:
-        end_date = NSDate.dateWithTimeIntervalSinceNow_(60*60*24*365)  # 1 year ahead
+        end_date = NSDate.dateWithTimeIntervalSinceNow_(60*60*24*365*2)  # 2 years ahead
     
     predicate = CalCalendarStore.eventPredicateWithStartDate_endDate_calendars_(
         start_date, end_date, [calendar]
@@ -105,9 +105,11 @@ def task_to_event_dict(task, calendar_name, is_from_today=False):
         if 'start_date' in task and task['start_date']:
             start_date = parse(task['start_date'])
             # If this is from today() and the start date is in the past, use today instead
+            # This adjustment should be tracked to avoid unnecessary updates
             if is_from_today:
                 today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 if start_date < today:
+                    event_dict['original_start_date'] = start_date
                     start_date = today
         else:
             # This is a today task without a specific start date
@@ -210,16 +212,31 @@ def events_are_different(existing_event, new_event_dict):
     if existing_notes != new_notes:
         return True
     
-    # Check dates (comparing timestamps to avoid timezone issues)
-    existing_start = existing_event.startDate().timeIntervalSince1970()
-    new_start = new_event_dict['start_date'].timestamp()
-    if abs(existing_start - new_start) > 60:  # Allow 1 minute tolerance
-        return True
+    # Check dates - for all-day events, compare dates only (not times)
+    existing_start_ts = existing_event.startDate().timeIntervalSince1970()
+    new_start_ts = new_event_dict['start_date'].timestamp()
     
-    existing_end = existing_event.endDate().timeIntervalSince1970()
-    new_end = new_event_dict['end_date'].timestamp()
-    if abs(existing_end - new_end) > 60:  # Allow 1 minute tolerance
-        return True
+    if existing_event.isAllDay():
+        # For all-day events, compare dates only
+        existing_start = datetime.datetime.fromtimestamp(existing_start_ts).date()
+        new_start = new_event_dict['start_date'].date()
+        if existing_start != new_start:
+            return True
+            
+        existing_end_ts = existing_event.endDate().timeIntervalSince1970()
+        existing_end = datetime.datetime.fromtimestamp(existing_end_ts).date()
+        new_end = new_event_dict['end_date'].date()
+        if existing_end != new_end:
+            return True
+    else:
+        # For timed events, use timestamp comparison with tolerance
+        if abs(existing_start_ts - new_start_ts) > 60:  # Allow 1 minute tolerance
+            return True
+        
+        existing_end_ts = existing_event.endDate().timeIntervalSince1970()
+        new_end_ts = new_event_dict['end_date'].timestamp()
+        if abs(existing_end_ts - new_end_ts) > 60:  # Allow 1 minute tolerance
+            return True
     
     return False
 
@@ -257,8 +274,10 @@ def sync_logbook_to_calendar(tasks, calendar_name='Things Logbook'):
         logger.error(f'Calendar "{calendar_name}" not found')
         return
     
-    # Get existing events
-    existing_events = get_existing_events(calendar)
+    # Get existing events - use wider range for logbook (4 years to cover 2022-2025)
+    start_date = NSDate.dateWithTimeIntervalSinceNow_(-60*60*24*365*4)  # 4 years ago
+    end_date = NSDate.dateWithTimeIntervalSinceNow_(60*60*24*365*1)  # 1 year ahead
+    existing_events = get_existing_events(calendar, start_date, end_date)
     logger.info(f"Found {len(existing_events)} existing events in {calendar_name}")
     
     # Track which events we've processed
