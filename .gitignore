@@ -1,3 +1,12 @@
 logbook*.md
 .python-version
 setup.py
+*csv
+*backup*
+*txt
+*bak*
+*.log
+*test*
+*out
+__pycache__/
+things3_projects/
