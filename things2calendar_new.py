@@ -449,4 +449,7 @@ def run_continuous_sync(interval=60, logbook_interval=1800):
 
 if __name__ == "__main__":
     # Run continuous sync: Upcoming/Deadlines every 60 seconds, Logbook every 30 minutes
-    run_continuous_sync(interval=60, logbook_interval=1800)
+    #run_continuous_sync(interval=60, logbook_interval=1800)
+    
+    # Run one-off sync
+    main_sync(include_logbook=True)

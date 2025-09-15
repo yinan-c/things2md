@@ -57,7 +57,7 @@ def group_tasks_by_project(all_tasks):
         if 'project' in task:
             project_id = task['project']
             project_title = task.get('project_title', 'Untitled')
-            
+
             # Update project info if not already set
             if not projects[project_id]['info']:
                 projects[project_id]['info'] = {
@@ -67,7 +67,7 @@ def group_tasks_by_project(all_tasks):
                     'notes': '',
                     'tags': []
                 }
-            
+
             # Categorize task
             if task.get('status') == 'completed':
                 projects[project_id]['completed_tasks'].append(task)
@@ -75,8 +75,30 @@ def group_tasks_by_project(all_tasks):
                 projects[project_id]['completed_tasks'].append(task)
             else:
                 projects[project_id]['active_tasks'].append(task)
+
+    # Handle tasks that belong to an area only (no project)
+    for task in all_tasks:
+        if 'project' not in task and 'area' in task:
+            area_id = task['area']
+            area_title = task.get('area_title', 'Untitled Area')
+
+            # Initialize area info if needed
+            if not projects[area_id]['info']:
+                projects[area_id]['info'] = {
+                    'title': area_title,
+                    'uuid': area_id,
+                    'status': 'open',
+                    'notes': '',
+                    'tags': []
+                }
+
+            # Categorize task under the area
+            if task.get('status') in ['completed', 'canceled']:
+                projects[area_id]['completed_tasks'].append(task)
+            else:
+                projects[area_id]['active_tasks'].append(task)
     
-    # Handle tasks without projects (Inbox)
+    # Handle tasks without projects and without areas (Inbox)
     inbox_tasks = []
     for task in all_tasks:
         if 'project' not in task and 'area' not in task:
