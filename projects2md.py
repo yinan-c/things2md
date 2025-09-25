@@ -28,6 +28,7 @@ def build_heading_lookup(project_lookup):
             or project_info.get("title", ""),
             "area": project_info.get("area"),
             "area_title": project_info.get("area_title"),
+            "heading_title": heading.get("title", ""),
         }
 
     return heading_lookup
@@ -50,6 +51,45 @@ def inject_heading_context(task, heading_lookup):
 
     if meta.get("area_title") and "area_title" not in task:
         task["area_title"] = meta["area_title"]
+
+    if (not task.get("heading_title")) and meta.get("heading_title"):
+        task["heading_title"] = meta["heading_title"]
+
+
+def append_tasks_with_headings(content, tasks, heading_level):
+    """Append task markdown grouped by heading hierarchy."""
+    if not tasks:
+        return
+
+    tasks_without_heading = []
+    heading_sections = {}
+    heading_order = []
+
+    for task in tasks:
+        heading_id = task.get("heading")
+        if heading_id:
+            if heading_id not in heading_sections:
+                heading_sections[heading_id] = {
+                    "title": task.get("heading_title") or "Untitled Heading",
+                    "tasks": [],
+                }
+                heading_order.append(heading_id)
+            heading_sections[heading_id]["tasks"].append(task)
+        else:
+            tasks_without_heading.append(task)
+
+    for task in tasks_without_heading:
+        content.append(format_task_as_markdown(task))
+
+    heading_prefix = "#" * heading_level
+
+    for heading_id in heading_order:
+        section = heading_sections[heading_id]
+        if content and content[-1] != "":
+            content.append("")
+        content.append(f"{heading_prefix} {section['title']}")
+        for task in section["tasks"]:
+            content.append(format_task_as_markdown(task))
 
 
 def compute_md5(text):
@@ -253,9 +293,8 @@ def generate_project_markdown(project_data):
         content.append("")
         # Sort by creation date if available
         active_tasks.sort(key=lambda x: x.get('created', ''), reverse=False)
-        for task in active_tasks:
-            content.append(format_task_as_markdown(task))
-    
+        append_tasks_with_headings(content, active_tasks, heading_level=3)
+
     # Completed tasks
     if completed_tasks:
         content.append("")
@@ -263,9 +302,8 @@ def generate_project_markdown(project_data):
         content.append("")
         # Sort by completion date if available
         completed_tasks.sort(key=lambda x: x.get('stop_date', ''), reverse=True)
-        for task in completed_tasks:
-            content.append(format_task_as_markdown(task))
-    
+        append_tasks_with_headings(content, completed_tasks, heading_level=3)
+
     return '\n'.join(content)
 
 
