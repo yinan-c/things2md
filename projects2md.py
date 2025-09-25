@@ -5,9 +5,57 @@ import hashlib
 from collections import defaultdict
 from datetime import datetime
 
+
+def build_project_lookup(status=None):
+    """Index projects by uuid so we can resolve inherited metadata."""
+    project_list = things.projects(status=status)
+    return {project["uuid"]: project for project in project_list}, project_list
+
+
+def build_heading_lookup(project_lookup):
+    """Map each heading to its parent project (and area) metadata."""
+    headings = things.tasks(type="heading", status=None)
+    heading_lookup = {}
+    for heading in headings:
+        project_id = heading.get("project")
+        if not project_id:
+            continue
+
+        project_info = project_lookup.get(project_id, {})
+        heading_lookup[heading["uuid"]] = {
+            "project": project_id,
+            "project_title": heading.get("project_title")
+            or project_info.get("title", ""),
+            "area": project_info.get("area"),
+            "area_title": project_info.get("area_title"),
+        }
+
+    return heading_lookup
+
+
+def inject_heading_context(task, heading_lookup):
+    """Ensure to-dos under headings expose their project/area context."""
+    if "project" in task or "heading" not in task:
+        return
+
+    meta = heading_lookup.get(task["heading"])
+    if not meta:
+        return
+
+    task["project"] = meta.get("project")
+    task["project_title"] = meta.get("project_title")
+
+    if meta.get("area") and "area" not in task:
+        task["area"] = meta["area"]
+
+    if meta.get("area_title") and "area_title" not in task:
+        task["area_title"] = meta["area_title"]
+
+
 def compute_md5(text):
     """Compute MD5 hash of the given text."""
     return hashlib.md5(text.encode('utf-8')).hexdigest()
+
 
 def sanitize_filename(filename):
     """Sanitize the filename by removing or replacing special characters."""
@@ -16,11 +64,13 @@ def sanitize_filename(filename):
         filename = filename.replace(char, '_')
     return filename[:200]  # Limit filename length
 
+
 def format_note_as_blockquote(note):
     """Format the note text as a Markdown blockquote."""
     if not note:
         return ""
     return '\n'.join([f"> {line}" if line.strip() else '>' for line in note.split('\n')])
+
 
 def get_all_tasks():
     """Get all tasks including completed ones from Things 3."""
@@ -32,6 +82,7 @@ def get_all_tasks():
     
     return active_tasks + logbook_tasks
 
+
 def group_tasks_by_project(all_tasks):
     """Group tasks by their project."""
     projects = defaultdict(lambda: {
@@ -41,7 +92,9 @@ def group_tasks_by_project(all_tasks):
     })
     
     # Also get standalone projects
-    project_list = things.projects()
+    project_lookup, project_list = build_project_lookup(status=None)
+    heading_lookup = build_heading_lookup(project_lookup)
+
     for project in project_list:
         project_id = project['uuid']
         projects[project_id]['info'] = {
@@ -49,9 +102,14 @@ def group_tasks_by_project(all_tasks):
             'uuid': project_id,
             'status': project.get('status', 'open'),
             'notes': project.get('notes', ''),
-            'tags': project.get('tags', [])
+            'tags': project.get('tags', []),
+            'area': project.get('area'),
+            'area_title': project.get('area_title')
         }
     
+    for task in all_tasks:
+        inject_heading_context(task, heading_lookup)
+
     # Group tasks by project
     for task in all_tasks:
         if 'project' in task:
@@ -60,12 +118,15 @@ def group_tasks_by_project(all_tasks):
 
             # Update project info if not already set
             if not projects[project_id]['info']:
+                project_info = project_lookup.get(project_id, {})
                 projects[project_id]['info'] = {
-                    'title': project_title,
+                    'title': project_info.get('title', project_title),
                     'uuid': project_id,
-                    'status': 'open',
-                    'notes': '',
-                    'tags': []
+                    'status': project_info.get('status', 'open'),
+                    'notes': project_info.get('notes', ''),
+                    'tags': project_info.get('tags', []),
+                    'area': project_info.get('area'),
+                    'area_title': project_info.get('area_title')
                 }
 
             # Categorize task
@@ -119,6 +180,7 @@ def group_tasks_by_project(all_tasks):
     
     return projects
 
+
 def format_task_as_markdown(task):
     """Format a single task as markdown checkbox item."""
     title = task.get('title', 'Untitled')
@@ -148,6 +210,7 @@ def format_task_as_markdown(task):
         task_line += "\n" + formatted_notes
     
     return task_line
+
 
 def generate_project_markdown(project_data):
     """Generate markdown content for a project."""
@@ -205,6 +268,7 @@ def generate_project_markdown(project_data):
     
     return '\n'.join(content)
 
+
 def create_markdown_files(projects, output_directory="things3_projects"):
     """Create markdown files for each project."""
     os.makedirs(output_directory, exist_ok=True)
@@ -246,6 +310,7 @@ def create_markdown_files(projects, output_directory="things3_projects"):
             f.write(new_content)
     
     return files_created, files_updated, files_unchanged
+
 
 def main():
     """Main function to export Things 3 projects to markdown."""

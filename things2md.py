@@ -3,12 +3,61 @@ from collections import defaultdict
 import datetime
 import things
 
-def logbook_to_md(data):
+
+def build_heading_lookup():
+    """Map heading UUIDs to their parent project and area metadata."""
+    project_lookup = {
+        project["uuid"]: project
+        for project in things.projects(status=None)
+    }
+
+    heading_lookup = {}
+    headings = things.tasks(type="heading", status=None)
+    for heading in headings:
+        project_id = heading.get("project")
+        if not project_id:
+            continue
+
+        project_info = project_lookup.get(project_id, {})
+        heading_lookup[heading["uuid"]] = {
+            "project": project_id,
+            "project_title": heading.get("project_title")
+            or project_info.get("title", ""),
+            "area": project_info.get("area"),
+            "area_title": project_info.get("area_title"),
+        }
+
+    return heading_lookup
+
+
+def inject_heading_context(entry, heading_lookup):
+    """Ensure logbook entries under headings have project context."""
+    if "project" in entry or "heading" not in entry:
+        return
+
+    meta = heading_lookup.get(entry["heading"])
+    if not meta:
+        return
+
+    entry["project"] = meta.get("project")
+    entry["project_title"] = meta.get("project_title")
+
+    if meta.get("area") and "area" not in entry:
+        entry["area"] = meta["area"]
+
+    if meta.get("area_title") and "area_title" not in entry:
+        entry["area_title"] = meta["area_title"]
+
+
+def logbook_to_md(data, heading_lookup=None):
     sorted_data = sorted(data, key = itemgetter('stop_date'), reverse=True)
 
     md_dict = defaultdict(lambda: defaultdict(list))
 
+    heading_lookup = heading_lookup or build_heading_lookup()
+
     for entry in sorted_data:
+        inject_heading_context(entry, heading_lookup)
         todo_link = f"[{entry['title']}](things:///show?id={entry['uuid']})"
         stop_date = datetime.datetime.strptime(entry['stop_date'], '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d')
 
