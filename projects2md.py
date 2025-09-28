@@ -112,6 +112,46 @@ def format_note_as_blockquote(note):
     return '\n'.join([f"> {line}" if line.strip() else '>' for line in note.split('\n')])
 
 
+def get_checklist_items(task):
+    """Return checklist items for a task, fetching them if necessary."""
+    checklist = task.get('checklist')
+    if not checklist:
+        return []
+
+    if isinstance(checklist, list):
+        return checklist
+
+    if checklist is True and task.get('uuid'):
+        try:
+            return things.checklist_items(task['uuid'])
+        except Exception:
+            return []
+
+    return []
+
+
+def format_checklist_as_markdown(task):
+    """Format checklist items as nested markdown checkboxes."""
+    items = get_checklist_items(task)
+    formatted = []
+    for item in items:
+        title = item.get('title', '').strip()
+        if not title:
+            continue
+
+        status = item.get('status', 'incomplete')
+        if status == 'completed':
+            checkbox = "- [x]"
+        elif status == 'canceled':
+            checkbox = "- [-]"
+        else:
+            checkbox = "- [ ]"
+
+        formatted.append(f"\t{checkbox} {title}")
+
+    return formatted
+
+
 def get_all_tasks():
     """Get all tasks including completed ones from Things 3."""
     # Get active tasks
@@ -239,17 +279,19 @@ def format_task_as_markdown(task):
     
     # Build task line
     task_line = f"{checkbox} [{title}](things:///show?id={uuid})"
-    
+
     # Add tags
     if tags:
         task_line += " " + " ".join(f"#{tag}" for tag in tags)
-    
-    # Add notes as indented content
+
+    lines = [task_line]
+
     if notes:
-        formatted_notes = '\n'.join('\t' + line for line in notes.splitlines())
-        task_line += "\n" + formatted_notes
-    
-    return task_line
+        lines.extend('\t' + line for line in notes.splitlines())
+
+    lines.extend(format_checklist_as_markdown(task))
+
+    return '\n'.join(lines)
 
 
 def generate_project_markdown(project_data):

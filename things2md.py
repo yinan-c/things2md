@@ -4,6 +4,46 @@ import datetime
 import things
 
 
+def get_checklist_items(entry):
+    """Return checklist items for a logbook entry, fetching them if required."""
+    checklist = entry.get("checklist")
+    if not checklist:
+        return []
+
+    if isinstance(checklist, list):
+        return checklist
+
+    if checklist is True and entry.get("uuid"):
+        try:
+            return things.checklist_items(entry["uuid"])
+        except Exception:
+            return []
+
+    return []
+
+
+def format_checklist_as_markdown(entry):
+    """Format checklist items as indented markdown tasks."""
+    items = get_checklist_items(entry)
+    lines = []
+    for item in items:
+        title = item.get("title", "").strip()
+        if not title:
+            continue
+
+        status = item.get("status", "incomplete")
+        if status == "completed":
+            checkbox = "- [x]"
+        elif status == "canceled":
+            checkbox = "- [-]"
+        else:
+            checkbox = "- [ ]"
+
+        lines.append(f"\t{checkbox} {title}")
+
+    return lines
+
+
 def build_heading_lookup():
     """Map heading UUIDs to their parent project and area metadata."""
     project_lookup = {
@@ -121,14 +161,14 @@ def logbook_to_md(data, heading_lookup=None):
         else:
             group_key = 'No project or area'
 
+        lines = [md_str]
+        notes = entry.get('notes')
+        if notes:
+            lines.extend('\t' + line for line in notes.splitlines())
 
-        if 'notes' in entry:
-            if entry['notes'] == '':
-                pass
-            else:
-                md_str += "\n"
-                notes = '\n'.join('\t' + line for line in entry['notes'].splitlines())
-                md_str += notes
+        lines.extend(format_checklist_as_markdown(entry))
+
+        md_str = '\n'.join(lines)
 
         md_dict[stop_date][group_key].append({
             "heading": entry.get("heading"),
