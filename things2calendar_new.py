@@ -14,6 +14,50 @@ import things
 import time
 
 
+def get_today_tasks(**kwargs):
+    """Return Today items with safe sorting when start dates are missing."""
+
+    def _sort_key(task):
+        today_index = task.get("today_index")
+        try:
+            today_index = int(today_index)
+        except (TypeError, ValueError):
+            today_index = float("inf")
+
+        start_date = task.get("start_date") or ""
+        return (today_index, start_date)
+
+    regular_today_tasks = things.tasks(
+        start_date="past",
+        start="Anytime",
+        index="todayIndex",
+        **kwargs,
+    )
+
+    unconfirmed_scheduled_tasks = things.tasks(
+        start_date="past",
+        start="Someday",
+        index="todayIndex",
+        **kwargs,
+    )
+
+    unconfirmed_overdue_tasks = things.tasks(
+        start_date=False,
+        deadline="past",
+        deadline_suppressed=False,
+        **kwargs,
+    )
+
+    result = [
+        *regular_today_tasks,
+        *unconfirmed_scheduled_tasks,
+        *unconfirmed_overdue_tasks,
+    ]
+
+    result.sort(key=_sort_key)
+    return result
+
+
 def get_calendar(calendar_name):
     """Get existing calendar."""
     store = CalCalendarStore.defaultCalendarStore()
@@ -235,7 +279,7 @@ def sync_upcoming_and_today(calendar_name="Things Upcoming"):
     
     print(f"  Getting tasks from Things...")
     # Get all tasks
-    today_tasks = things.today()
+    today_tasks = get_today_tasks()
     upcoming_tasks = things.upcoming()
     
     # Combine tasks, keeping track of which are from today
